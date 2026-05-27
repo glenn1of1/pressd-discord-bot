@@ -1,0 +1,47 @@
+# Environment variables — never commit secrets
+.env
+
+# Python virtual environments
+.venv/
+venv/
+env/
+ENV/
+
+# Python bytecode cache
+__pycache__/
+*.py[cod]
+*.pyo
+*.pyd
+
+# SQLite database files
+*.db
+*.sqlite
+*.sqlite3
+
+# Distribution / build artifacts
+dist/
+build/
+*.egg-info/
+*.egg
+
+# Pytest cache
+.pytest_cache/
+.coverage
+htmlcov/
+
+# IDE metadata
+.vscode/
+.idea/
+*.swp
+*.swo
+
+# OS metadata
+.DS_Store
+Thumbs.db
+
+# Logs
+*.log
+discord.log
+
+# Railway
+.railway/
