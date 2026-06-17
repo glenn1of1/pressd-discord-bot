@@ -3,8 +3,11 @@ from __future__ import annotations
 from pathlib import Path
 
 import aiosqlite
+import os
 
-DB_PATH = Path(__file__).parent.parent / "valorant_bot.db"
+DB_PATH = Path(
+    os.getenv("DB_PATH", str(Path(__file__).parent.parent / "valorant_bot.db"))
+)
 
 
 async def init_db() -> None:
@@ -66,9 +69,7 @@ async def get_user(discord_id: str) -> dict | None:
 
 async def delete_user(discord_id: str) -> None:
     async with aiosqlite.connect(DB_PATH) as db:
-        await db.execute(
-            "DELETE FROM users WHERE discord_id = ?", (discord_id,)
-        )
+        await db.execute("DELETE FROM users WHERE discord_id = ?", (discord_id,))
         await db.commit()
 
 
