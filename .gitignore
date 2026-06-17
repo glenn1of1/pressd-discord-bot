@@ -45,3 +45,7 @@ discord.log
 
 # Railway
 .railway/
+
+# Build files and documentation
+BUILD.md
+PRD.md
