@@ -37,7 +37,7 @@ class StatsCog(commands.Cog):
                 else f"{target.display_name} hasn't"
             )
             await interaction.followup.send(
-                f"{who} registered yet. Use `/register Name#TAG` to link an account.",
+                f"{who} is a nimrod and hasn't registered yet. Use `/register Name#TAG` to link an account.",
                 ephemeral=True,
             )
             return None
@@ -192,7 +192,7 @@ class StatsCog(commands.Cog):
             trend_parts.append(f"+{change}" if change >= 0 else str(change))
         trend = " / ".join(trend_parts) if trend_parts else "No data"
 
-        last_str = (f"+{last_change}" if last_change >= 0 else str(last_change))
+        last_str = f"+{last_change}" if last_change >= 0 else str(last_change)
 
         embed = discord.Embed(
             title=f"{name}#{tag} — Rank",
