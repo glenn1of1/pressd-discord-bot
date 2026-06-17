@@ -21,7 +21,7 @@ class HenrikClient:
                 if resp.status == 404:
                     raise LookupError("Riot account not found")
                 if resp.status == 429:
-                    raise RuntimeError("Rate limit hit — slow down")
+                    raise RuntimeError("Rate limit hit — slow down mud")
                 resp.raise_for_status()
                 return await resp.json()
 
