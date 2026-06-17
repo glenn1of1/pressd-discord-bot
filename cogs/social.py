@@ -19,16 +19,32 @@ _GOLD = 0xF1C40F
 # RR (0–99) is added as a fractional component so Diamond 1 at 99 RR (16.99)
 # never exceeds Diamond 2 at 0 RR (17.0).
 _TIER_ORDER: dict[str, int] = {
-    "Unranked":     0,
-    "Iron 1":       1,  "Iron 2":       2,  "Iron 3":       3,
-    "Bronze 1":     4,  "Bronze 2":     5,  "Bronze 3":     6,
-    "Silver 1":     7,  "Silver 2":     8,  "Silver 3":     9,
-    "Gold 1":      10,  "Gold 2":      11,  "Gold 3":      12,
-    "Platinum 1":  13,  "Platinum 2":  14,  "Platinum 3":  15,
-    "Diamond 1":   16,  "Diamond 2":   17,  "Diamond 3":   18,
-    "Ascendant 1": 19,  "Ascendant 2": 20,  "Ascendant 3": 21,
-    "Immortal 1":  22,  "Immortal 2":  23,  "Immortal 3":  24,
-    "Radiant":     25,
+    "Unranked": 0,
+    "Iron 1": 1,
+    "Iron 2": 2,
+    "Iron 3": 3,
+    "Bronze 1": 4,
+    "Bronze 2": 5,
+    "Bronze 3": 6,
+    "Silver 1": 7,
+    "Silver 2": 8,
+    "Silver 3": 9,
+    "Gold 1": 10,
+    "Gold 2": 11,
+    "Gold 3": 12,
+    "Platinum 1": 13,
+    "Platinum 2": 14,
+    "Platinum 3": 15,
+    "Diamond 1": 16,
+    "Diamond 2": 17,
+    "Diamond 3": 18,
+    "Ascendant 1": 19,
+    "Ascendant 2": 20,
+    "Ascendant 3": 21,
+    "Immortal 1": 22,
+    "Immortal 2": 23,
+    "Immortal 3": 24,
+    "Radiant": 25,
 }
 
 
@@ -106,10 +122,16 @@ class SocialCog(commands.Cog):
         try:
             matches1_raw, matches2_raw, mmr1_raw, mmr2_raw = await asyncio.gather(
                 self.henrik.get_matches(
-                    record1["region"], record1["riot_name"], record1["riot_tag"], size=20
+                    record1["region"],
+                    record1["riot_name"],
+                    record1["riot_tag"],
+                    size=20,
                 ),
                 self.henrik.get_matches(
-                    record2["region"], record2["riot_name"], record2["riot_tag"], size=20
+                    record2["region"],
+                    record2["riot_name"],
+                    record2["riot_tag"],
+                    size=20,
                 ),
                 self.henrik.get_mmr(
                     record1["region"], record1["riot_name"], record1["riot_tag"]
@@ -139,8 +161,8 @@ class SocialCog(commands.Cog):
         stats1 = compute_stats(matches1_raw, record1["riot_name"], record1["riot_tag"])
         stats2 = compute_stats(matches2_raw, record2["riot_name"], record2["riot_tag"])
 
-        name1  = f"{record1['riot_name']}#{record1['riot_tag']}"
-        name2  = f"{record2['riot_name']}#{record2['riot_tag']}"
+        name1 = f"{record1['riot_name']}#{record1['riot_tag']}"
+        name2 = f"{record2['riot_name']}#{record2['riot_tag']}"
         short1 = record1["riot_name"]
         short2 = record2["riot_name"]
 
@@ -163,10 +185,34 @@ class SocialCog(commands.Cog):
 
         # (label, raw_val1, raw_val2, display_str1, display_str2)
         categories: list[tuple[str, float, float, str, str]] = [
-            ("KDA",        stats1["kda"], stats2["kda"], str(stats1["kda"]),   str(stats2["kda"])),
-            ("Headshot %", stats1["hs"],  stats2["hs"],  f"{stats1['hs']}%",   f"{stats2['hs']}%"),
-            ("Win Rate",   stats1["wr"],  stats2["wr"],  f"{stats1['wr']}%",   f"{stats2['wr']}%"),
-            ("Avg ACS",    stats1["acs"], stats2["acs"], str(stats1["acs"]),   str(stats2["acs"])),
+            (
+                "KDA",
+                stats1["kda"],
+                stats2["kda"],
+                str(stats1["kda"]),
+                str(stats2["kda"]),
+            ),
+            (
+                "Headshot %",
+                stats1["hs"],
+                stats2["hs"],
+                f"{stats1['hs']}%",
+                f"{stats2['hs']}%",
+            ),
+            (
+                "Win Rate",
+                stats1["wr"],
+                stats2["wr"],
+                f"{stats1['wr']}%",
+                f"{stats2['wr']}%",
+            ),
+            (
+                "Avg ACS",
+                stats1["acs"],
+                stats2["acs"],
+                str(stats1["acs"]),
+                str(stats2["acs"]),
+            ),
         ]
 
         p1_wins = sum(1 for _, v1, v2, _, _ in categories if v1 > v2)
@@ -190,9 +236,9 @@ class SocialCog(commands.Cog):
         current1 = mmr1_raw.get("data", {}).get("current", {})
         current2 = mmr2_raw.get("data", {}).get("current", {})
         tier1 = current1.get("tier", {}).get("name", "Unranked")
-        rr1   = current1.get("rr", 0)
+        rr1 = current1.get("rr", 0)
         tier2 = current2.get("tier", {}).get("name", "Unranked")
-        rr2   = current2.get("rr", 0)
+        rr2 = current2.get("rr", 0)
         embed.add_field(
             name="Current Rank",
             value=f"**{short1}**: {tier1} — {rr1} RR  |  **{short2}**: {tier2} — {rr2} RR",
@@ -201,13 +247,13 @@ class SocialCog(commands.Cog):
 
         if p1_wins > p2_wins:
             verdict = f"**{short1}** wins {p1_wins} of {len(categories)} stats — {short2} is cooked."
-            footer  = generate_banter(stats2, pool="comparison_loss")
+            footer = generate_banter(stats2, pool="comparison_loss")
         elif p2_wins > p1_wins:
             verdict = f"**{short2}** wins {p2_wins} of {len(categories)} stats — {short1} is cooked."
-            footer  = generate_banter(stats1, pool="comparison_loss")
+            footer = generate_banter(stats1, pool="comparison_loss")
         else:
-            verdict = f"Dead heat — {short1} and {short2} are both equally disappointing."
-            footer  = generate_banter(stats1)
+            verdict = f"{short1} and {short2} are both dogshit LMFAOO."
+            footer = generate_banter(stats1)
 
         embed.add_field(name="Verdict", value=verdict, inline=False)
         embed.set_footer(text=footer)
@@ -221,12 +267,14 @@ class SocialCog(commands.Cog):
         description="Server-wide stat leaderboard for all registered players.",
     )
     @app_commands.describe(stat="Stat to rank by (default: KDA)")
-    @app_commands.choices(stat=[
-        app_commands.Choice(name="KDA",        value="kda"),
-        app_commands.Choice(name="Headshot %", value="hs"),
-        app_commands.Choice(name="Win Rate",   value="winrate"),
-        app_commands.Choice(name="Rank",       value="rank"),
-    ])
+    @app_commands.choices(
+        stat=[
+            app_commands.Choice(name="KDA", value="kda"),
+            app_commands.Choice(name="Headshot %", value="hs"),
+            app_commands.Choice(name="Win Rate", value="winrate"),
+            app_commands.Choice(name="Rank", value="rank"),
+        ]
+    )
     @app_commands.checks.cooldown(1, 30.0, key=lambda i: (i.guild_id, i.user.id))
     async def leaderboard(
         self,
@@ -255,7 +303,10 @@ class SocialCog(commands.Cog):
                             record["region"], record["riot_name"], record["riot_tag"]
                         )
                     return record, await self.henrik.get_matches(
-                        record["region"], record["riot_name"], record["riot_tag"], size=20
+                        record["region"],
+                        record["riot_name"],
+                        record["riot_tag"],
+                        size=20,
                     )
                 except Exception:
                     return record, None
@@ -265,10 +316,10 @@ class SocialCog(commands.Cog):
         )
 
         stat_labels = {
-            "kda":     "KDA",
-            "hs":      "Headshot %",
+            "kda": "KDA",
+            "hs": "Headshot %",
             "winrate": "Win Rate",
-            "rank":    "Rank",
+            "rank": "Rank",
         }
 
         rows: list[tuple[str, str, float]] = []  # (display_name, display_val, sort_val)
@@ -280,10 +331,10 @@ class SocialCog(commands.Cog):
                 continue
 
             if stat_key == "rank":
-                current   = raw.get("data", {}).get("current", {})
+                current = raw.get("data", {}).get("current", {})
                 tier_name = current.get("tier", {}).get("name", "Unranked")
-                rr        = current.get("rr", 0)
-                sort_val  = float(_TIER_ORDER.get(tier_name, 0)) + rr / 100
+                rr = current.get("rr", 0)
+                sort_val = float(_TIER_ORDER.get(tier_name, 0)) + rr / 100
                 rows.append((display, f"{tier_name} — {rr} RR", sort_val))
             else:
                 stats = compute_stats(raw, record["riot_name"], record["riot_tag"])
