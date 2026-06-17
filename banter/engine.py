@@ -25,7 +25,9 @@ def generate_banter(stats: dict, pool: str | None = None) -> str:
     acs = float(stats.get("acs", 0.0))
 
     if os.getenv("BANTER_MODE", "template").lower() == "ai":
-        log.warning("BANTER_MODE=ai is not yet implemented — falling back to template.")
+        log.warning(
+            "BANTER_MODE=ai is not yet implemented because the developer is a lazy bum — falling back to template."
+        )
 
     selected_pool = pool if pool else _pick_pool(kda, hs, wr, acs)
     template = random.choice(TEMPLATES[selected_pool])
@@ -41,7 +43,7 @@ def generate_banter(stats: dict, pool: str | None = None) -> str:
 
 
 def _pick_pool(kda: float, hs: float, wr: float, acs: float) -> str:
-    """Select the roast pool based on PRD Section 8.2 thresholds.
+    """Select the roast pool based on the thresholds set.
 
     Priority: worst stat first. First threshold that fails wins.
     """
