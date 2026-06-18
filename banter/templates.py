@@ -37,11 +37,11 @@ TEMPLATES: dict[str, list[str]] = {
         "aint shit tbh. {name} is still glenns bitch tho",
     ],
     "good_performance": [
-        "Okay, {name} actually cooked this time. {kda} KDA and {hs}% HS%. Respect... barely.",
-        "{name} is playing well. {kda} KDA, {wr}% wins. Don't let it go to their head.",
-        "Even a broken clock is right twice a day. {name} at {kda} KDA lately though — fair play.",
-        "{name}'s been popping off. {kda} KDA, {acs} ACS. We hate to see it.",
-        "The stats don't lie: {name} is actually performing. {wr}% wins, {kda} KDA. Disgusting.",
+        "damn {name} actually said fuck it and started performing. {kda} kda, {acs} acs. still mid tho.",
+        "{name} cooked lately ngl. {kda} kda and {hs}% hs. dont get too comfortable tho pussy.",
+        "okay {name} we see u. {wr}% wins and {kda} kda lately. its giving less ass than usual.",
+        "{name} is actually bussin rn and we hate it. {kda} kda, {acs} acs. somebody bench this bum before he gets confident.",
+        "ngl {name} u been playing good and it makes me uncomfortable as hell. {kda} kda {wr}% wins. still our bitch tho.",
     ],
     "comparison_win": [
         "{name} won this comparison. not a glitch. clearly the fuckin goat",
