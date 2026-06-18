@@ -10,16 +10,15 @@ DB_PATH = Path(
     os.getenv("DB_PATH", str(Path(__file__).parent.parent / "valorant_bot.db"))
 )
 
+if not os.getenv("DB_PATH"):
+    print(
+        "WARNING: DB_PATH env var is not set. Using local fallback path. "
+        "Registrations will be lost on redeploy if running on Railway.",
+        flush=True,
+    )
+
 
 async def init_db() -> None:
-    # #region agent log
-    import time as _t
-    _env_val = os.getenv("DB_PATH", "__NOT_SET__")
-    _db_exists = Path(DB_PATH).exists()
-    _payload = {"sessionId":"f30042","hypothesisId":"H1-H2-H3-H4","location":"database/db.py:init_db","message":"DB init","data":{"DB_PATH_env":_env_val,"resolved_path":str(DB_PATH),"file_exists_before_init":_db_exists},"timestamp":int(_t.time()*1000)}
-    print(f"[DEBUG f30042] {json.dumps(_payload)}", flush=True)
-    with open("debug-f30042.log","a") as _lf: _lf.write(json.dumps(_payload)+"\n")
-    # #endregion
     async with aiosqlite.connect(DB_PATH) as db:
         await db.execute(
             """
@@ -42,13 +41,6 @@ async def init_db() -> None:
             """
         )
         await db.commit()
-        # #region agent log
-        async with db.execute("SELECT COUNT(*) FROM users") as _cur:
-            _user_count = (await _cur.fetchone())[0]
-        _payload2 = {"sessionId":"f30042","hypothesisId":"H3","location":"database/db.py:init_db:post","message":"DB init complete","data":{"user_rows_after_init":_user_count},"timestamp":int(_t.time()*1000)}
-        print(f"[DEBUG f30042] {json.dumps(_payload2)}", flush=True)
-        with open("debug-f30042.log","a") as _lf: _lf.write(json.dumps(_payload2)+"\n")
-        # #endregion
 
 
 async def register_user(
