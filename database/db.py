@@ -1,9 +1,10 @@
 from __future__ import annotations
 
+import json
+import os
 from pathlib import Path
 
 import aiosqlite
-import os
 
 DB_PATH = Path(
     os.getenv("DB_PATH", str(Path(__file__).parent.parent / "valorant_bot.db"))
@@ -79,3 +80,39 @@ async def get_all_users() -> list[dict]:
         async with db.execute("SELECT * FROM users") as cursor:
             rows = await cursor.fetchall()
             return [dict(row) for row in rows]
+
+
+async def get_cached_stats(
+    discord_id: str,
+    max_age_seconds: int = 300,
+) -> dict | None:
+    """Return cached leaderboard data for a user if it is within max_age_seconds, else None."""
+    async with aiosqlite.connect(DB_PATH) as db:
+        db.row_factory = aiosqlite.Row
+        async with db.execute(
+            """
+            SELECT cached_json
+            FROM stats_cache
+            WHERE discord_id = ?
+              AND (julianday('now') - julianday(last_updated)) * 86400 < ?
+            """,
+            (discord_id, max_age_seconds),
+        ) as cursor:
+            row = await cursor.fetchone()
+            return json.loads(row["cached_json"]) if row else None
+
+
+async def set_cached_stats(discord_id: str, data: dict) -> None:
+    """Write or refresh leaderboard cache for a user."""
+    async with aiosqlite.connect(DB_PATH) as db:
+        await db.execute(
+            """
+            INSERT INTO stats_cache (discord_id, cached_json, last_updated)
+            VALUES (?, ?, CURRENT_TIMESTAMP)
+            ON CONFLICT(discord_id) DO UPDATE SET
+                cached_json  = excluded.cached_json,
+                last_updated = CURRENT_TIMESTAMP
+            """,
+            (discord_id, json.dumps(data)),
+        )
+        await db.commit()
