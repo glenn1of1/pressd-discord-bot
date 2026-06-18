@@ -13,8 +13,6 @@ from banter.engine import generate_banter
 from database.db import get_all_users, get_user
 from utils.stats import compute_stats
 
-_GOLD = 0xF1C40F
-
 # Maps Valorant tier names to sortable integers for /leaderboard rank sorting.
 # RR (0–99) is added as a fractional component so Diamond 1 at 99 RR (16.99)
 # never exceeds Diamond 2 at 0 RR (17.0).
@@ -61,13 +59,9 @@ class SocialCog(commands.Cog):
         target = user or interaction.user
         record = await get_user(str(target.id))
         if record is None:
-            who = (
-                "You haven't"
-                if target == interaction.user
-                else f"{target.display_name} hasn't"
-            )
+            who = "" if target == interaction.user else f"{target.display_name}"
             await interaction.followup.send(
-                f"{who} registered yet. Use `/register Name#TAG` to link an account.",
+                f"{who} is a nimrod and has not registered yet. Use `/register Name#TAG` to link an account.",
                 ephemeral=True,
             )
             return None
@@ -80,7 +74,7 @@ class SocialCog(commands.Cog):
     ) -> None:
         if isinstance(error, app_commands.CommandOnCooldown):
             msg = (
-                f"Slow down — this command is on cooldown. "
+                f"CHILL IM BROKE. THIS COMMAND IS ON COOLDOWN. "
                 f"Try again in {error.retry_after:.0f}s."
             )
             if interaction.response.is_done():
@@ -108,7 +102,8 @@ class SocialCog(commands.Cog):
 
         if user1.id == user2.id:
             await interaction.followup.send(
-                "Pick two different people.", ephemeral=True
+                "TWO. DIFFERENT. PEOPLE. PICK TWO DIFFERENT PEOPLE. DAMN.",
+                ephemeral=True,
             )
             return
 
@@ -142,18 +137,19 @@ class SocialCog(commands.Cog):
             )
         except LookupError:
             await interaction.followup.send(
-                "Couldn't find one of those Riot accounts. Double-check the names.",
+                "Couldn't find one of those Riot accounts. Double-check the names. Must be buggin lol.",
                 ephemeral=True,
             )
             return
         except RuntimeError:
             await interaction.followup.send(
-                "Too many requests — try again in a minute.", ephemeral=True
+                "CHILL CHILL CHILL! Too many requests, slow down a little. Take a walk and ask me again.",
+                ephemeral=True,
             )
             return
         except Exception:
             await interaction.followup.send(
-                "The Valorant API is having a moment. Try again in a bit.",
+                "The Valorant API is having a lil temper tantrum moment. Try again in a bit.",
                 ephemeral=True,
             )
             return
@@ -168,18 +164,20 @@ class SocialCog(commands.Cog):
 
         if stats1["games"] == 0 and stats2["games"] == 0:
             await interaction.followup.send(
-                "Both players have private match history. Nothing to compare.",
+                "Both players wanna be mystery men and think they're hollywood. Nothing to compare.",
                 ephemeral=True,
             )
             return
         if stats1["games"] == 0:
             await interaction.followup.send(
-                f"{name1}'s match history is private.", ephemeral=True
+                f"{name1} thinks they the shit and is too cool to make their match history public.",
+                ephemeral=True,
             )
             return
         if stats2["games"] == 0:
             await interaction.followup.send(
-                f"{name2}'s match history is private.", ephemeral=True
+                f"{name2} thinks they the shit and is too cool to make their match history public.",
+                ephemeral=True,
             )
             return
 
@@ -220,7 +218,6 @@ class SocialCog(commands.Cog):
 
         embed = discord.Embed(
             title=f"⚔️  {name1}  vs  {name2}",
-            color=_GOLD,
             timestamp=datetime.now(timezone.utc),
         )
 
@@ -246,10 +243,10 @@ class SocialCog(commands.Cog):
         )
 
         if p1_wins > p2_wins:
-            verdict = f"**{short1}** wins {p1_wins} of {len(categories)} stats — {short2} is cooked."
+            verdict = f"**{short1}** wins {p1_wins} of {len(categories)} stats — {short2} this isn't a glitch, you are shit."
             footer = generate_banter(stats2, pool="comparison_loss")
         elif p2_wins > p1_wins:
-            verdict = f"**{short2}** wins {p2_wins} of {len(categories)} stats — {short1} is cooked."
+            verdict = f"**{short2}** wins {p2_wins} of {len(categories)} stats — {short1} step it up pussy ass bitch."
             footer = generate_banter(stats1, pool="comparison_loss")
         else:
             verdict = f"{short1} and {short2} are both dogshit LMFAOO."
@@ -266,7 +263,9 @@ class SocialCog(commands.Cog):
         name="leaderboard",
         description="Server-wide stat leaderboard for all registered players.",
     )
-    @app_commands.describe(stat="Stat to rank by (default: KDA)")
+    @app_commands.describe(
+        stat="Stat to rank by (default: KDA) (range : last 20 games)"
+    )
     @app_commands.choices(
         stat=[
             app_commands.Choice(name="KDA", value="kda"),
@@ -360,13 +359,12 @@ class SocialCog(commands.Cog):
         embed = discord.Embed(
             title=f"🏆  Server Leaderboard — {stat_labels[stat_key]}",
             description="\n".join(lines),
-            color=_GOLD,
             timestamp=datetime.now(timezone.utc),
         )
         embed.set_footer(
             text=(
                 f"Showing {len(rows)} registered player"
-                f"{'s' if len(rows) != 1 else ''} · Live data"
+                f"{'s' if len(rows) != 1 else ''} · Last 20 games"
             )
         )
 
@@ -376,7 +374,7 @@ class SocialCog(commands.Cog):
 
     @app_commands.command(
         name="roast",
-        description="Fire a stat-driven roast at someone.",
+        description="Talk yo shit to someone.",
     )
     @app_commands.describe(user="The unfortunate soul to roast")
     @app_commands.checks.cooldown(1, 30.0, key=lambda i: (i.guild_id, i.user.id))

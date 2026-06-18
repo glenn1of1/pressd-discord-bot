@@ -8,9 +8,6 @@ from discord.ext import commands
 
 from version import RELEASED, VERSION
 
-_GOLD = 0xF1C40F
-
-
 class MetaCog(commands.Cog):
     def __init__(self, bot: commands.Bot) -> None:
         self.bot = bot
@@ -24,13 +21,16 @@ class MetaCog(commands.Cog):
 
         embed = discord.Embed(
             title="ValoPresser Bot",
-            color=_GOLD,
             timestamp=datetime.now(timezone.utc),
         )
         embed.add_field(name="Version", value=f"v{VERSION}", inline=True)
         embed.add_field(name="Released", value=RELEASED, inline=True)
-        embed.add_field(name="Commands", value=f"{command_count} slash commands", inline=True)
-        embed.set_footer(text="Data via HenrikDev · Phase 1")
+        embed.add_field(
+            name="Commands",
+            value=f"{command_count} slash commands available",
+            inline=True,
+        )
+        embed.set_footer(text="Data via HenrikDev · Thanks brah for the API!")
 
         await interaction.response.send_message(embed=embed)
 

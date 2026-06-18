@@ -15,7 +15,6 @@ from utils.stats import _find_player, compute_stats
 
 _GREEN = 0x2ECC71
 _RED = 0xE74C3C
-_GOLD = 0xF1C40F
 
 
 class StatsCog(commands.Cog):
@@ -31,13 +30,9 @@ class StatsCog(commands.Cog):
         target = user or interaction.user
         record = await get_user(str(target.id))
         if record is None:
-            who = (
-                "You haven't"
-                if target == interaction.user
-                else f"{target.display_name} hasn't"
-            )
+            who = "" if target == interaction.user else f"{target.display_name}"
             await interaction.followup.send(
-                f"{who} is a nimrod and hasn't registered yet. Use `/register Name#TAG` to link an account.",
+                f"{who} is a nimrod and has not registered yet. Use `/register Name#TAG` to link an account.",
                 ephemeral=True,
             )
             return None
@@ -70,19 +65,19 @@ class StatsCog(commands.Cog):
             )
         except LookupError:
             await interaction.followup.send(
-                "Couldn't find that Riot account. Double-check the name and tag.",
+                "Must be tweaking cuz I cant find that Riot account. Double-check the name and tag.",
                 ephemeral=True,
             )
             return
         except RuntimeError:
             await interaction.followup.send(
-                "Too many requests — slow down a little. Try again in a minute.",
+                "CHILL CHILL CHILL! Too many requests, slow down a little. Take a walk and ask me again.",
                 ephemeral=True,
             )
             return
         except Exception:
             await interaction.followup.send(
-                "The Valorant API is having a moment. Try again in a bit.",
+                "The Valorant API is having a lil temper tantrum moment. Try again in a bit.",
                 ephemeral=True,
             )
             return
@@ -91,7 +86,7 @@ class StatsCog(commands.Cog):
 
         if stats["games"] == 0:
             await interaction.followup.send(
-                "This player's match history is set to private in-game. Nothing to show.",
+                "This player thinks they the shit and is too cool to make their match history public. Nothing to show.",
                 ephemeral=True,
             )
             return
@@ -196,7 +191,6 @@ class StatsCog(commands.Cog):
 
         embed = discord.Embed(
             title=f"{name}#{tag} — Rank",
-            color=_GOLD,
             timestamp=datetime.now(timezone.utc),
         )
         embed.add_field(
@@ -210,7 +204,7 @@ class StatsCog(commands.Cog):
             inline=True,
         )
         embed.add_field(name="RR Trend (last 5)", value=trend, inline=True)
-        embed.set_footer(text=f"Act {peak_season} · Data via HenrikDev")
+        embed.set_footer(text=f"Act {peak_season}")
 
         await interaction.followup.send(embed=embed)
 
@@ -244,17 +238,18 @@ class StatsCog(commands.Cog):
             matches_raw = await self.henrik.get_matches(region, name, tag, size=count)
         except LookupError:
             await interaction.followup.send(
-                "Couldn't find that Riot account.", ephemeral=True
+                "Must be tweaking cuz I cant find that Riot account.", ephemeral=True
             )
             return
         except RuntimeError:
             await interaction.followup.send(
-                "Too many requests — try again in a minute.", ephemeral=True
+                "CHILL CHILL CHILL! Too many requests, slow down a little. Take a walk and ask me again.",
+                ephemeral=True,
             )
             return
         except Exception:
             await interaction.followup.send(
-                "The Valorant API is having a moment. Try again in a bit.",
+                "The Valorant API is having a lil temper tantrum moment. Try again in a bit.",
                 ephemeral=True,
             )
             return
@@ -262,14 +257,13 @@ class StatsCog(commands.Cog):
         matches = matches_raw.get("data", [])
         if not matches:
             await interaction.followup.send(
-                "This player's match history is set to private in-game. Nothing to show.",
+                "This player thinks they the shit and is too cool to make their match history public. Nothing to show.",
                 ephemeral=True,
             )
             return
 
         embed = discord.Embed(
             title=f"{name}#{tag} — Last {len(matches)} Games",
-            color=_GOLD,
             timestamp=datetime.now(timezone.utc),
         )
 
