@@ -10,7 +10,7 @@ from discord.ext import commands
 
 from api.henrik import HenrikClient
 from banter.engine import generate_banter
-from database.db import get_all_users, get_user
+from database.db import get_all_users, get_cached_stats, get_user, set_cached_stats
 from utils.stats import compute_stats
 
 # Maps Valorant tier names to sortable integers for /leaderboard rank sorting.
@@ -296,19 +296,31 @@ class SocialCog(commands.Cog):
 
         async def _fetch(record: dict) -> tuple[dict, dict | None]:
             async with sem:
+                cached = await get_cached_stats(record["discord_id"])
+                if cached is not None:
+                    return record, cached
+
                 try:
-                    if stat_key == "rank":
-                        return record, await self.henrik.get_mmr(
+                    matches_raw, mmr_raw = await asyncio.gather(
+                        self.henrik.get_matches(
+                            record["region"], record["riot_name"], record["riot_tag"], size=20
+                        ),
+                        self.henrik.get_mmr(
                             record["region"], record["riot_name"], record["riot_tag"]
-                        )
-                    return record, await self.henrik.get_matches(
-                        record["region"],
-                        record["riot_name"],
-                        record["riot_tag"],
-                        size=20,
+                        ),
                     )
                 except Exception:
                     return record, None
+
+                stats = compute_stats(matches_raw, record["riot_name"], record["riot_tag"])
+                current = mmr_raw.get("data", {}).get("current", {})
+                blob = {
+                    "stats": stats,
+                    "tier_name": current.get("tier", {}).get("name", "Unranked"),
+                    "rr": current.get("rr", 0),
+                }
+                await set_cached_stats(record["discord_id"], blob)
+                return record, blob
 
         results: list[tuple[dict, dict | None]] = list(
             await asyncio.gather(*(_fetch(u) for u in users))
@@ -322,21 +334,20 @@ class SocialCog(commands.Cog):
         }
 
         rows: list[tuple[str, str, float]] = []  # (display_name, display_val, sort_val)
-        for record, raw in results:
+        for record, blob in results:
             display = f"{record['riot_name']}#{record['riot_tag']}"
 
-            if raw is None:
+            if blob is None:
                 rows.append((display, "N/A", -999.0))
                 continue
 
             if stat_key == "rank":
-                current = raw.get("data", {}).get("current", {})
-                tier_name = current.get("tier", {}).get("name", "Unranked")
-                rr = current.get("rr", 0)
+                tier_name = blob["tier_name"]
+                rr = blob["rr"]
                 sort_val = float(_TIER_ORDER.get(tier_name, 0)) + rr / 100
                 rows.append((display, f"{tier_name} — {rr} RR", sort_val))
             else:
-                stats = compute_stats(raw, record["riot_name"], record["riot_tag"])
+                stats = blob["stats"]
                 if stats["games"] == 0:
                     rows.append((display, "N/A", -999.0))
                     continue
@@ -364,7 +375,7 @@ class SocialCog(commands.Cog):
         embed.set_footer(
             text=(
                 f"Showing {len(rows)} registered player"
-                f"{'s' if len(rows) != 1 else ''} · Last 20 games"
+                f"{'s' if len(rows) != 1 else ''} · Last 20 games · cached up to 5 min"
             )
         )
 
