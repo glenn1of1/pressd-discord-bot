@@ -38,6 +38,23 @@ class StatsCog(commands.Cog):
             return None
         return record
 
+    async def cog_app_command_error(
+        self,
+        interaction: discord.Interaction,
+        error: app_commands.AppCommandError,
+    ) -> None:
+        if isinstance(error, app_commands.CommandOnCooldown):
+            msg = (
+                f"CHILL IM BROKE. THIS COMMAND IS ON COOLDOWN. "
+                f"Try again in {error.retry_after:.0f}s."
+            )
+            if interaction.response.is_done():
+                await interaction.followup.send(msg, ephemeral=True)
+            else:
+                await interaction.response.send_message(msg, ephemeral=True)
+        else:
+            raise error
+
     # ------------------------------------------------------------------ /stats
 
     @app_commands.command(
@@ -45,6 +62,7 @@ class StatsCog(commands.Cog):
         description="Show last 20 game stats for a player.",
     )
     @app_commands.describe(user="Discord user to look up (defaults to you)")
+    @app_commands.checks.cooldown(1, 15.0, key=lambda i: (i.guild_id, i.user.id))
     async def stats(
         self,
         interaction: discord.Interaction,
@@ -135,6 +153,7 @@ class StatsCog(commands.Cog):
         description="Show current rank, RR, and recent RR trend.",
     )
     @app_commands.describe(user="Discord user to look up (defaults to you)")
+    @app_commands.checks.cooldown(1, 15.0, key=lambda i: (i.guild_id, i.user.id))
     async def rank(
         self,
         interaction: discord.Interaction,
@@ -218,6 +237,7 @@ class StatsCog(commands.Cog):
         user="Discord user to look up (defaults to you)",
         count="Number of matches to show (1–10, default 5)",
     )
+    @app_commands.checks.cooldown(1, 15.0, key=lambda i: (i.guild_id, i.user.id))
     async def recent(
         self,
         interaction: discord.Interaction,
