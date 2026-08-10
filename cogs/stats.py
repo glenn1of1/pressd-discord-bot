@@ -1,7 +1,6 @@
 from __future__ import annotations
 
 import asyncio
-import os
 from datetime import datetime, timezone
 
 import discord
@@ -20,7 +19,7 @@ _RED = 0xE74C3C
 class StatsCog(commands.Cog):
     def __init__(self, bot: commands.Bot) -> None:
         self.bot = bot
-        self.henrik = HenrikClient(os.getenv("HENRIK_API_KEY", ""))
+        self.henrik: HenrikClient = bot.henrik
 
     async def _resolve_user(
         self,

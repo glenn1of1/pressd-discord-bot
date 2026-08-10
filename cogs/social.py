@@ -1,7 +1,6 @@
 from __future__ import annotations
 
 import asyncio
-import os
 from datetime import datetime, timezone
 
 import discord
@@ -49,7 +48,7 @@ _TIER_ORDER: dict[str, int] = {
 class SocialCog(commands.Cog):
     def __init__(self, bot: commands.Bot) -> None:
         self.bot = bot
-        self.henrik = HenrikClient(os.getenv("HENRIK_API_KEY", ""))
+        self.henrik: HenrikClient = bot.henrik
 
     async def _resolve_user(
         self,
@@ -303,7 +302,10 @@ class SocialCog(commands.Cog):
                 try:
                     matches_raw, mmr_raw = await asyncio.gather(
                         self.henrik.get_matches(
-                            record["region"], record["riot_name"], record["riot_tag"], size=20
+                            record["region"],
+                            record["riot_name"],
+                            record["riot_tag"],
+                            size=20,
                         ),
                         self.henrik.get_mmr(
                             record["region"], record["riot_name"], record["riot_tag"]
@@ -312,7 +314,9 @@ class SocialCog(commands.Cog):
                 except Exception:
                     return record, None
 
-                stats = compute_stats(matches_raw, record["riot_name"], record["riot_tag"])
+                stats = compute_stats(
+                    matches_raw, record["riot_name"], record["riot_tag"]
+                )
                 current = mmr_raw.get("data", {}).get("current", {})
                 blob = {
                     "stats": stats,

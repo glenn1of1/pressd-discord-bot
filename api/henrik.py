@@ -9,21 +9,31 @@ class HenrikClient:
     def __init__(self, api_key: str) -> None:
         self._api_key = api_key
         self._headers = {"Authorization": api_key}
+        self._session: aiohttp.ClientSession | None = None
+
+    def _get_session(self) -> aiohttp.ClientSession:
+        if self._session is None or self._session.closed:
+            self._session = aiohttp.ClientSession(headers=self._headers)
+        return self._session
+
+    async def close(self) -> None:
+        if self._session and not self._session.closed:
+            await self._session.close()
 
     async def _get(self, path: str, **params) -> dict:
         url = f"{BASE_URL}{path}"
-        async with aiohttp.ClientSession() as session:
-            async with session.get(url, headers=self._headers, params=params) as resp:
-                if resp.status == 401:
-                    raise ValueError(
-                        "Invalid HenrikDev API key — check HENRIK_API_KEY in .env"
-                    )
-                if resp.status == 404:
-                    raise LookupError("Riot account not found")
-                if resp.status == 429:
-                    raise RuntimeError("Rate limit hit — slow down mud")
-                resp.raise_for_status()
-                return await resp.json()
+        session = self._get_session()
+        async with session.get(url, params=params) as resp:
+            if resp.status == 401:
+                raise ValueError(
+                    "Invalid HenrikDev API key — check HENRIK_API_KEY in .env"
+                )
+            if resp.status == 404:
+                raise LookupError("Riot account not found")
+            if resp.status == 429:
+                raise RuntimeError("Rate limit hit — slow down mud")
+            resp.raise_for_status()
+            return await resp.json()
 
     async def get_account(self, name: str, tag: str) -> dict:
         return await self._get(f"/valorant/v1/account/{name}/{tag}")

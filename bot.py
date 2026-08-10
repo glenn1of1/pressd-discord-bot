@@ -5,6 +5,7 @@ import discord
 from discord.ext import commands
 from dotenv import load_dotenv
 
+from api.henrik import HenrikClient
 from database.db import init_db
 
 load_dotenv()
@@ -15,6 +16,7 @@ class ValoPresserBot(commands.Bot):
         intents = discord.Intents.default()
         intents.members = True
         super().__init__(command_prefix="!", intents=intents)
+        self.henrik = HenrikClient(os.getenv("HENRIK_API_KEY"))
 
     async def setup_hook(self) -> None:
         await init_db()
@@ -38,6 +40,10 @@ class ValoPresserBot(commands.Bot):
     async def on_ready(self) -> None:
         print(f"Logged in as {self.user} (ID: {self.user.id})", flush=True)
         print("we ready muddddyyy.", flush=True)
+
+    async def close(self) -> None:
+        await self.henrik.close()
+        await super().close()
 
     async def start_bot(self) -> None:
         token = os.getenv("DISCORD_TOKEN")
