@@ -62,6 +62,10 @@ async def register_user(
             """,
             (discord_id, riot_name, riot_tag, region),
         )
+        # The cache row is keyed by discord_id only, so a re-register under a
+        # different Riot ID would keep serving the previous account's stats
+        # until the TTL expired.
+        await db.execute("DELETE FROM stats_cache WHERE discord_id = ?", (discord_id,))
         await db.commit()
 
 
@@ -78,6 +82,7 @@ async def get_user(discord_id: str) -> dict | None:
 async def delete_user(discord_id: str) -> None:
     async with aiosqlite.connect(DB_PATH) as db:
         await db.execute("DELETE FROM users WHERE discord_id = ?", (discord_id,))
+        await db.execute("DELETE FROM stats_cache WHERE discord_id = ?", (discord_id,))
         await db.commit()
 
 
