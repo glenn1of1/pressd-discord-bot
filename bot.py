@@ -15,6 +15,32 @@ load_dotenv()
 log = logging.getLogger(__name__)
 
 
+def setup_logging() -> None:
+    """Configure root logging for the process.
+
+    Without this, log.exception() in the error handler falls through to
+    logging's last-resort handler: stderr, no timestamp, no level. On Railway
+    that output is the only window into a crash, so it needs to be readable.
+
+    LOG_LEVEL overrides the default; discord.py's own chatter is pinned to
+    WARNING because its INFO stream is heartbeat noise.
+    """
+    level_name = os.getenv("LOG_LEVEL", "INFO").upper()
+    level = getattr(logging, level_name, None)
+    if not isinstance(level, int):
+        level = logging.INFO
+
+    logging.basicConfig(
+        level=level,
+        format="%(asctime)s %(levelname)-8s %(name)s: %(message)s",
+        datefmt="%Y-%m-%d %H:%M:%S",
+    )
+    logging.getLogger("discord").setLevel(logging.WARNING)
+
+    if level_name not in logging._nameToLevel:
+        log.warning("LOG_LEVEL=%r is not a valid level — using INFO", level_name)
+
+
 class ValoPresserBot(commands.Bot):
     def __init__(self) -> None:
         intents = discord.Intents.default()
@@ -51,13 +77,13 @@ class ValoPresserBot(commands.Bot):
 
     async def setup_hook(self) -> None:
         await init_db()
-        print("Database initialized.", flush=True)
+        log.info("Database initialized.")
 
         cogs_dir = Path(__file__).parent / "cogs"
         for path in sorted(cogs_dir.glob("*.py")):
             if path.stem != "__init__":
                 await self.load_extension(f"cogs.{path.stem}")
-                print(f"Loaded cog: cogs.{path.stem}", flush=True)
+                log.info("Loaded cog: cogs.%s", path.stem)
 
         # DISCORD_GUILD_ID is the dev switch: a guild sync lands instantly, so
         # it's what you want while iterating. Production leaves it unset and
@@ -68,17 +94,16 @@ class ValoPresserBot(commands.Bot):
             guild = discord.Object(id=int(guild_id))
             self.tree.copy_global_to(guild=guild)
             synced = await self.tree.sync(guild=guild)
-            print(
-                f"Synced {len(synced)} commands to guild {guild_id} (dev mode).",
-                flush=True,
+            log.info(
+                "Synced %d commands to guild %s (dev mode).", len(synced), guild_id
             )
         else:
             synced = await self.tree.sync()
-            print(f"Synced {len(synced)} commands globally.", flush=True)
+            log.info("Synced %d commands globally.", len(synced))
 
     async def on_ready(self) -> None:
-        print(f"Logged in as {self.user} (ID: {self.user.id})", flush=True)
-        print("we ready muddddyyy.", flush=True)
+        log.info("Logged in as %s (ID: %s)", self.user, self.user.id)
+        log.info("Connected to %d guild(s). we ready muddddyyy.", len(self.guilds))
 
     async def close(self) -> None:
         await self.henrik.close()

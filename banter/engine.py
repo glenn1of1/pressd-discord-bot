@@ -9,14 +9,19 @@ from banter.templates import TEMPLATES
 log = logging.getLogger(__name__)
 
 
-def generate_banter(stats: dict, pool: str | None = None) -> str:
+def generate_banter(
+    stats: dict, pool: str | None = None, opponent: str = "that guy"
+) -> str:
     """Return a formatted banter string for the given stats dict.
 
     Args:
-        stats: Must contain keys: name (str), kda (float), hs (float),
-               wr (float), acs (float).
-        pool:  Force a specific template pool (e.g. "comparison_win").
-               If None, the pool is selected automatically from stat thresholds.
+        stats:    Must contain keys: name (str), kda (float), hs (float),
+                  wr (float), acs (float).
+        pool:     Force a specific template pool (e.g. "comparison_win").
+                  If None, the pool is selected automatically from stat thresholds.
+        opponent: Fills {name2}, used by the head-to-head pools. Only some
+                  templates reference it, so it needs a usable default —
+                  without one, picking such a template raises KeyError.
     """
     name = stats.get("name", "you")
     kda = float(stats.get("kda", 0.0))
@@ -34,6 +39,7 @@ def generate_banter(stats: dict, pool: str | None = None) -> str:
 
     return template.format(
         name=name,
+        name2=opponent,
         kda=f"{kda:.2f}",
         hs=f"{hs:.1f}",
         wr=f"{wr:.0f}",

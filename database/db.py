@@ -1,6 +1,7 @@
 from __future__ import annotations
 
 import json
+import logging
 import os
 from collections.abc import AsyncIterator
 from contextlib import asynccontextmanager
@@ -8,16 +9,11 @@ from pathlib import Path
 
 import aiosqlite
 
+log = logging.getLogger(__name__)
+
 DB_PATH = Path(
     os.getenv("DB_PATH", str(Path(__file__).parent.parent / "valorant_bot.db"))
 )
-
-if not os.getenv("DB_PATH"):
-    print(
-        "WARNING: DB_PATH env var is not set. Using local fallback path. "
-        "Registrations will be lost on redeploy if running on Railway.",
-        flush=True,
-    )
 
 # How long a query waits on a locked database before giving up.
 _BUSY_TIMEOUT_SECONDS = 10.0
@@ -41,6 +37,15 @@ async def _connect() -> AsyncIterator[aiosqlite.Connection]:
 
 
 async def init_db() -> None:
+    # Warned here rather than at import time so it lands after logging is
+    # configured — otherwise it bypasses the formatter entirely.
+    if not os.getenv("DB_PATH"):
+        log.warning(
+            "DB_PATH env var is not set. Using local fallback path %s. "
+            "Registrations will be lost on redeploy if running on Railway.",
+            DB_PATH,
+        )
+
     async with _connect() as db:
         # WAL lets readers proceed while a write is in flight. Without it, the
         # concurrent reads /leaderboard fans out across guilds serialise against
@@ -51,10 +56,10 @@ async def init_db() -> None:
         if mode != "wal":
             # Some network filesystems silently refuse WAL. Worth knowing about
             # on a mounted volume rather than discovering it under load.
-            print(
-                f"WARNING: could not enable WAL (journal_mode={mode}). "
+            log.warning(
+                "Could not enable WAL (journal_mode=%s). "
                 "Writes will block concurrent reads.",
-                flush=True,
+                mode,
             )
 
         await db.execute(
@@ -133,7 +138,7 @@ async def get_all_users() -> list[dict]:
 
 async def get_cached_stats(
     discord_id: str,
-    max_age_seconds: int = 300,
+    max_age_seconds: float = 300,
 ) -> dict | None:
     """Return cached leaderboard data for a user if it is within max_age_seconds, else None."""
     async with _connect() as db:

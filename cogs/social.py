@@ -10,7 +10,7 @@ from discord.ext import commands
 from api.henrik import HenrikClient
 from banter.engine import generate_banter
 from database.db import get_all_users, get_user
-from utils.cache import get_player_blob
+from utils.cache import DEFAULT_TTL_SECONDS, MATCH_SAMPLE_SIZE, get_player_blob
 from utils.paginator import EmbedPaginator
 from utils.stats import compute_stats
 
@@ -338,9 +338,11 @@ class SocialCog(commands.Cog):
             lines[i : i + _ROWS_PER_PAGE] for i in range(0, len(lines), _ROWS_PER_PAGE)
         ]
 
+        cache_minutes = max(1, round(DEFAULT_TTL_SECONDS / 60))
         base_footer = (
             f"Showing {len(rows)} registered player"
-            f"{'s' if len(rows) != 1 else ''} · Last 20 games · cached up to 5 min"
+            f"{'s' if len(rows) != 1 else ''} · Last {MATCH_SAMPLE_SIZE} games"
+            f" · cached up to {cache_minutes} min"
         )
 
         embeds: list[discord.Embed] = []

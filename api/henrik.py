@@ -1,10 +1,20 @@
 from __future__ import annotations
 
 import asyncio
+import logging
+import os
+import time
 
 import aiohttp
 
+log = logging.getLogger(__name__)
+
 BASE_URL = "https://api.henrikdev.xyz"
+
+# Requests per minute allowed out of this process. The HenrikDev Basic key
+# permits 30/min, so the default sits under it to leave room for the retries
+# below. Raise via HENRIK_RATE_LIMIT if the key is upgraded — no redeploy needed.
+DEFAULT_RATE_LIMIT = 25
 
 # aiohttp's default is 5 minutes. A request that hangs that long would pin a
 # /leaderboard semaphore slot and outlive the Discord interaction anyway.
@@ -28,11 +38,69 @@ def _retry_delay(resp: aiohttp.ClientResponse, attempt: int) -> float:
     return min(_BASE_BACKOFF_SECONDS * 2**attempt, _MAX_BACKOFF_SECONDS)
 
 
+def _env_int(name: str, default: int) -> int:
+    """Read a positive int from the environment, falling back on junk values."""
+    raw = os.getenv(name)
+    if raw is None:
+        return default
+    try:
+        value = int(raw)
+    except ValueError:
+        log.warning("%s=%r is not an integer — using %d", name, raw, default)
+        return default
+    if value < 1:
+        log.warning("%s=%d must be at least 1 — using %d", name, value, default)
+        return default
+    return value
+
+
+class _RateLimiter:
+    """Token bucket capping outbound requests to a per-minute budget.
+
+    Requests beyond the budget wait for a token rather than failing, which is
+    what makes a 30/min API key survivable across a dozen guilds: a burst of
+    /leaderboard traffic renders slowly instead of erroring out.
+
+    The lock is deliberately held across the sleep so waiters are served in
+    arrival order and the refill maths can't race.
+    """
+
+    def __init__(self, per_minute: int) -> None:
+        self.capacity = float(per_minute)
+        self._tokens = self.capacity
+        self._refill_per_second = self.capacity / 60.0
+        self._updated = time.monotonic()
+        self._lock = asyncio.Lock()
+
+    async def acquire(self) -> float:
+        """Consume one token, waiting if necessary. Returns seconds waited."""
+        async with self._lock:
+            waited = 0.0
+            while True:
+                now = time.monotonic()
+                self._tokens = min(
+                    self.capacity,
+                    self._tokens + (now - self._updated) * self._refill_per_second,
+                )
+                self._updated = now
+
+                if self._tokens >= 1.0:
+                    self._tokens -= 1.0
+                    return waited
+
+                delay = (1.0 - self._tokens) / self._refill_per_second
+                waited += delay
+                await asyncio.sleep(delay)
+
+
 class HenrikClient:
-    def __init__(self, api_key: str) -> None:
+    def __init__(self, api_key: str, rate_limit: int | None = None) -> None:
         self._api_key = api_key
         self._headers = {"Authorization": api_key}
         self._session: aiohttp.ClientSession | None = None
+        if rate_limit is None:
+            rate_limit = _env_int("HENRIK_RATE_LIMIT", DEFAULT_RATE_LIMIT)
+        self._limiter = _RateLimiter(rate_limit)
 
     def _get_session(self) -> aiohttp.ClientSession:
         if self._session is None or self._session.closed:
@@ -50,6 +118,17 @@ class HenrikClient:
         session = self._get_session()
 
         for attempt in range(_MAX_RETRIES + 1):
+            # Every attempt spends a token, retries included — a retry is still
+            # a real request against the quota.
+            waited = await self._limiter.acquire()
+            if waited > 0.1:
+                # The signal for whether the paid key tier is worth buying.
+                log.info(
+                    "Rate limiter delayed a request by %.1fs (budget %.0f/min)",
+                    waited,
+                    self._limiter.capacity,
+                )
+
             async with session.get(url, params=params) as resp:
                 if resp.status == 401:
                     raise ValueError(
