@@ -1,2 +1,2 @@
-VERSION = "1.2.1"
-RELEASED = "June 18, 2026"
+VERSION = "1.3.0"
+RELEASED = "August 12, 2026"

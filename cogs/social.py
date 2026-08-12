@@ -1,7 +1,6 @@
 from __future__ import annotations
 
 import asyncio
-import os
 from datetime import datetime, timezone
 
 import discord
@@ -10,8 +9,14 @@ from discord.ext import commands
 
 from api.henrik import HenrikClient
 from banter.engine import generate_banter
-from database.db import get_all_users, get_cached_stats, get_user, set_cached_stats
+from database.db import get_all_users, get_user
+from utils.cache import DEFAULT_TTL_SECONDS, MATCH_SAMPLE_SIZE, get_player_blob
+from utils.paginator import EmbedPaginator
 from utils.stats import compute_stats
+
+# Rows per /leaderboard page. Discord caps an embed description at 4096 chars;
+# this sits far below that and keeps a page readable on mobile.
+_ROWS_PER_PAGE = 15
 
 # Maps Valorant tier names to sortable integers for /leaderboard rank sorting.
 # RR (0–99) is added as a fractional component so Diamond 1 at 99 RR (16.99)
@@ -49,7 +54,7 @@ _TIER_ORDER: dict[str, int] = {
 class SocialCog(commands.Cog):
     def __init__(self, bot: commands.Bot) -> None:
         self.bot = bot
-        self.henrik = HenrikClient(os.getenv("HENRIK_API_KEY", ""))
+        self.henrik: HenrikClient = bot.henrik
 
     async def _resolve_user(
         self,
@@ -66,23 +71,6 @@ class SocialCog(commands.Cog):
             )
             return None
         return record
-
-    async def cog_app_command_error(
-        self,
-        interaction: discord.Interaction,
-        error: app_commands.AppCommandError,
-    ) -> None:
-        if isinstance(error, app_commands.CommandOnCooldown):
-            msg = (
-                f"CHILL IM BROKE. THIS COMMAND IS ON COOLDOWN. "
-                f"Try again in {error.retry_after:.0f}s."
-            )
-            if interaction.response.is_done():
-                await interaction.followup.send(msg, ephemeral=True)
-            else:
-                await interaction.response.send_message(msg, ephemeral=True)
-        else:
-            raise error
 
     # --------------------------------------------------------------- /compare
 
@@ -115,25 +103,9 @@ class SocialCog(commands.Cog):
             return
 
         try:
-            matches1_raw, matches2_raw, mmr1_raw, mmr2_raw = await asyncio.gather(
-                self.henrik.get_matches(
-                    record1["region"],
-                    record1["riot_name"],
-                    record1["riot_tag"],
-                    size=20,
-                ),
-                self.henrik.get_matches(
-                    record2["region"],
-                    record2["riot_name"],
-                    record2["riot_tag"],
-                    size=20,
-                ),
-                self.henrik.get_mmr(
-                    record1["region"], record1["riot_name"], record1["riot_tag"]
-                ),
-                self.henrik.get_mmr(
-                    record2["region"], record2["riot_name"], record2["riot_tag"]
-                ),
+            blob1, blob2 = await asyncio.gather(
+                get_player_blob(self.henrik, record1),
+                get_player_blob(self.henrik, record2),
             )
         except LookupError:
             await interaction.followup.send(
@@ -154,8 +126,8 @@ class SocialCog(commands.Cog):
             )
             return
 
-        stats1 = compute_stats(matches1_raw, record1["riot_name"], record1["riot_tag"])
-        stats2 = compute_stats(matches2_raw, record2["riot_name"], record2["riot_tag"])
+        stats1 = blob1["stats"]
+        stats2 = blob2["stats"]
 
         name1 = f"{record1['riot_name']}#{record1['riot_tag']}"
         name2 = f"{record2['riot_name']}#{record2['riot_tag']}"
@@ -230,12 +202,10 @@ class SocialCog(commands.Cog):
                 line = f"**{short1}**: {s1}  |  **{short2}**: {s2}  (tied)"
             embed.add_field(name=label, value=line, inline=False)
 
-        current1 = mmr1_raw.get("data", {}).get("current", {})
-        current2 = mmr2_raw.get("data", {}).get("current", {})
-        tier1 = current1.get("tier", {}).get("name", "Unranked")
-        rr1 = current1.get("rr", 0)
-        tier2 = current2.get("tier", {}).get("name", "Unranked")
-        rr2 = current2.get("rr", 0)
+        tier1 = blob1["tier_name"]
+        rr1 = blob1["rr"]
+        tier2 = blob2["tier_name"]
+        rr2 = blob2["rr"]
         embed.add_field(
             name="Current Rank",
             value=f"**{short1}**: {tier1} — {rr1} RR  |  **{short2}**: {tier2} — {rr2} RR",
@@ -284,10 +254,26 @@ class SocialCog(commands.Cog):
 
         stat_key = stat.value if stat else "kda"
 
-        users = await get_all_users()
+        if interaction.guild is None:
+            await interaction.followup.send(
+                "That's a server command. Run it in a server, not my DMs.",
+                ephemeral=True,
+            )
+            return
+
+        # Registrations are global (one Riot ID per Discord account, reusable in
+        # every server), so the board must be narrowed to members of THIS guild —
+        # otherwise every server sees every other server's players and Riot IDs.
+        # Relies on the member cache, which is populated because intents.members
+        # is enabled and discord.py chunks guilds at startup.
+        users = [
+            u
+            for u in await get_all_users()
+            if interaction.guild.get_member(int(u["discord_id"])) is not None
+        ]
         if not users:
             await interaction.followup.send(
-                "No one has registered yet. Use `/register Name#TAG` to get on the board.",
+                "Nobody in this server has registered yet. Use `/register Name#TAG` to get on the board.",
                 ephemeral=True,
             )
             return
@@ -296,31 +282,12 @@ class SocialCog(commands.Cog):
 
         async def _fetch(record: dict) -> tuple[dict, dict | None]:
             async with sem:
-                cached = await get_cached_stats(record["discord_id"])
-                if cached is not None:
-                    return record, cached
-
                 try:
-                    matches_raw, mmr_raw = await asyncio.gather(
-                        self.henrik.get_matches(
-                            record["region"], record["riot_name"], record["riot_tag"], size=20
-                        ),
-                        self.henrik.get_mmr(
-                            record["region"], record["riot_name"], record["riot_tag"]
-                        ),
-                    )
+                    return record, await get_player_blob(self.henrik, record)
                 except Exception:
+                    # One unreachable player degrades to an "N/A" row rather
+                    # than failing the whole leaderboard.
                     return record, None
-
-                stats = compute_stats(matches_raw, record["riot_name"], record["riot_tag"])
-                current = mmr_raw.get("data", {}).get("current", {})
-                blob = {
-                    "stats": stats,
-                    "tier_name": current.get("tier", {}).get("name", "Unranked"),
-                    "rr": current.get("rr", 0),
-                }
-                await set_cached_stats(record["discord_id"], blob)
-                return record, blob
 
         results: list[tuple[dict, dict | None]] = list(
             await asyncio.gather(*(_fetch(u) for u in users))
@@ -367,19 +334,43 @@ class SocialCog(commands.Cog):
             else:
                 lines.append(f"{i}. **{name}** — {val}")
 
-        embed = discord.Embed(
-            title=f"🏆  Server Leaderboard — {stat_labels[stat_key]}",
-            description="\n".join(lines),
-            timestamp=datetime.now(timezone.utc),
-        )
-        embed.set_footer(
-            text=(
-                f"Showing {len(rows)} registered player"
-                f"{'s' if len(rows) != 1 else ''} · Last 20 games · cached up to 5 min"
-            )
+        pages = [
+            lines[i : i + _ROWS_PER_PAGE] for i in range(0, len(lines), _ROWS_PER_PAGE)
+        ]
+
+        cache_minutes = max(1, round(DEFAULT_TTL_SECONDS / 60))
+        base_footer = (
+            f"Showing {len(rows)} registered player"
+            f"{'s' if len(rows) != 1 else ''} · Last {MATCH_SAMPLE_SIZE} games"
+            f" · cached up to {cache_minutes} min"
         )
 
-        await interaction.followup.send(embed=embed)
+        embeds: list[discord.Embed] = []
+        for page_no, chunk in enumerate(pages, 1):
+            embed = discord.Embed(
+                title=f"🏆  Server Leaderboard — {stat_labels[stat_key]}",
+                description="\n".join(chunk),
+                timestamp=datetime.now(timezone.utc),
+            )
+            # Repeat the page number in the footer so it survives the view
+            # timing out and the buttons going dead.
+            embed.set_footer(
+                text=(
+                    f"Page {page_no}/{len(pages)} · {base_footer}"
+                    if len(pages) > 1
+                    else base_footer
+                )
+            )
+            embeds.append(embed)
+
+        if len(embeds) == 1:
+            await interaction.followup.send(embed=embeds[0])
+            return
+
+        view = EmbedPaginator(embeds, interaction.user.id)
+        view.message = await interaction.followup.send(
+            embed=embeds[0], view=view, wait=True
+        )
 
     # ----------------------------------------------------------------- /roast
 

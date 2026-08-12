@@ -1,7 +1,6 @@
 from __future__ import annotations
 
 import asyncio
-import os
 from datetime import datetime, timezone
 
 import discord
@@ -11,7 +10,8 @@ from discord.ext import commands
 from api.henrik import HenrikClient
 from banter.engine import generate_banter
 from database.db import get_user
-from utils.stats import _find_player, compute_stats
+from utils.cache import get_player_blob
+from utils.stats import _find_player
 
 _GREEN = 0x2ECC71
 _RED = 0xE74C3C
@@ -20,7 +20,7 @@ _RED = 0xE74C3C
 class StatsCog(commands.Cog):
     def __init__(self, bot: commands.Bot) -> None:
         self.bot = bot
-        self.henrik = HenrikClient(os.getenv("HENRIK_API_KEY", ""))
+        self.henrik: HenrikClient = bot.henrik
 
     async def _resolve_user(
         self,
@@ -37,23 +37,6 @@ class StatsCog(commands.Cog):
             )
             return None
         return record
-
-    async def cog_app_command_error(
-        self,
-        interaction: discord.Interaction,
-        error: app_commands.AppCommandError,
-    ) -> None:
-        if isinstance(error, app_commands.CommandOnCooldown):
-            msg = (
-                f"CHILL IM BROKE. THIS COMMAND IS ON COOLDOWN. "
-                f"Try again in {error.retry_after:.0f}s."
-            )
-            if interaction.response.is_done():
-                await interaction.followup.send(msg, ephemeral=True)
-            else:
-                await interaction.response.send_message(msg, ephemeral=True)
-        else:
-            raise error
 
     # ------------------------------------------------------------------ /stats
 
@@ -74,13 +57,10 @@ class StatsCog(commands.Cog):
         if record is None:
             return
 
-        name, tag, region = record["riot_name"], record["riot_tag"], record["region"]
+        name, tag = record["riot_name"], record["riot_tag"]
 
         try:
-            matches_raw, mmr_raw = await asyncio.gather(
-                self.henrik.get_matches(region, name, tag, size=20),
-                self.henrik.get_mmr(region, name, tag),
-            )
+            blob = await get_player_blob(self.henrik, record)
         except LookupError:
             await interaction.followup.send(
                 "Must be tweaking cuz I cant find that Riot account. Double-check the name and tag.",
@@ -100,7 +80,7 @@ class StatsCog(commands.Cog):
             )
             return
 
-        stats = compute_stats(matches_raw, name, tag)
+        stats = blob["stats"]
 
         if stats["games"] == 0:
             await interaction.followup.send(
@@ -109,9 +89,8 @@ class StatsCog(commands.Cog):
             )
             return
 
-        current = mmr_raw.get("data", {}).get("current", {})
-        tier_name = current.get("tier", {}).get("name", "Unranked")
-        rr = current.get("rr", 0)
+        tier_name = blob["tier_name"]
+        rr = blob["rr"]
 
         color = _GREEN if stats["wins"] >= stats["losses"] else _RED
         embed = discord.Embed(

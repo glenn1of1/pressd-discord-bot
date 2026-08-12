@@ -1,7 +1,5 @@
 from __future__ import annotations
 
-import os
-
 import discord
 from discord import app_commands
 from discord.ext import commands
@@ -13,7 +11,7 @@ from database.db import delete_user, get_user, register_user
 class Registration(commands.Cog):
     def __init__(self, bot: commands.Bot) -> None:
         self.bot = bot
-        self.henrik = HenrikClient(os.getenv("HENRIK_API_KEY", ""))
+        self.henrik: HenrikClient = bot.henrik
 
     @app_commands.command(
         name="register",
