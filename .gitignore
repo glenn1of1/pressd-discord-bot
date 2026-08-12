@@ -13,8 +13,10 @@ __pycache__/
 *.pyo
 *.pyd
 
-# SQLite database files
+# SQLite database files (WAL mode adds -wal/-shm sidecars)
 *.db
+*.db-wal
+*.db-shm
 *.sqlite
 *.sqlite3
 

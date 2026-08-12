@@ -72,23 +72,6 @@ class SocialCog(commands.Cog):
             return None
         return record
 
-    async def cog_app_command_error(
-        self,
-        interaction: discord.Interaction,
-        error: app_commands.AppCommandError,
-    ) -> None:
-        if isinstance(error, app_commands.CommandOnCooldown):
-            msg = (
-                f"CHILL IM BROKE. THIS COMMAND IS ON COOLDOWN. "
-                f"Try again in {error.retry_after:.0f}s."
-            )
-            if interaction.response.is_done():
-                await interaction.followup.send(msg, ephemeral=True)
-            else:
-                await interaction.response.send_message(msg, ephemeral=True)
-        else:
-            raise error
-
     # --------------------------------------------------------------- /compare
 
     @app_commands.command(
