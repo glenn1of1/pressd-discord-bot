@@ -1,134 +1,76 @@
-# ValoPresser
+# PRESSD
 
-A Discord bot that links Discord accounts to Riot IDs, pulls Valorant match and rank data from the
-[HenrikDev API](https://api.henrikdev.xyz), computes rolling performance stats, and generates
-trash talk based on how badly you're playing.
+A Discord bot that links your Riot account, pulls your Valorant match history and rank from the [HenrikDev API](https://docs.henrikdev.xyz/), and turns your stats into personality-driven trash talk.
 
-Built with `discord.py` slash commands, `aiohttp`, and SQLite.
+> **Heads up:** PRESSD's banter engine is built around crude, profanity-heavy humor by design (see `banter/templates.py`). It's meant for a private friend server, not a general-audience bot. Keep that in mind before inviting it to a public/mixed server — see [Content & Tone](#content--tone) below.
 
-> The banter is deliberately crude — that's the point of the bot. If you're forking this for
-> something more polite, `banter/templates.py` is the only file you need to rewrite.
+## Features
 
-## Commands
-
-| Command | What it does |
+| Command | Description |
 |---|---|
-| `/register <Name#TAG> [region]` | Link your Riot ID to your Discord account |
-| `/unregister` | Remove your linked Riot ID |
-| `/stats [user]` | KDA, headshot %, win rate, ACS and rank over the last 20 games |
-| `/rank [user]` | Current rank, RR, peak, and RR trend over the last 5 games |
-| `/recent [user] [count]` | Recent match history, 1–10 games |
-| `/compare <user1> <user2>` | Head-to-head stat comparison with a verdict |
-| `/leaderboard [stat]` | Server leaderboard by KDA, headshot %, win rate, or rank |
-| `/roast <user>` | Talk your shit |
-| `/version` | Bot version and command count |
+| `/register` | Link your Riot ID (`Name#TAG`) and region to your Discord account |
+| `/unregister` | Remove your linked account |
+| `/stats` | Last 20 games — KDA, headshot %, win rate, ACS, top agent, current rank |
+| `/rank` | Current rank, RR, peak rank, and recent RR trend |
+| `/recent` | Match-by-match breakdown (1–10 most recent games) |
+| `/compare` | Head-to-head stat comparison between two registered players |
+| `/leaderboard` | Server-wide ranking by KDA, headshot %, win rate, or rank |
+| `/roast` | Instant roast based on someone's recent performance |
+| `/version` | Bot version, release date, and command count |
 
-Registration is global — register once and your account works in every server the bot is in.
-Leaderboards are scoped per server, so you only ever see people you actually share a server with.
+## Tech Stack
 
-## How it works
+- [`discord.py`](https://github.com/Rapptz/discord.py) — slash commands, cogs
+- [`aiohttp`](https://docs.aiohttp.org/) — async HTTP client for the HenrikDev API
+- [`aiosqlite`](https://github.com/omnilib/aiosqlite) — async SQLite for user registration + stats caching
+- [HenrikDev API](https://docs.henrikdev.xyz/) — Valorant match, MMR, and account data
+- Deployed on [Railway](https://railway.app/)
 
-```
-Discord slash command
-  └─ cogs/            command handlers, embed building, error messages
-      └─ utils/cache  shared TTL cache — checks SQLite before hitting the network
-          └─ api/     HenrikClient: rate limiting, retries, one pooled session
-              └─ HenrikDev API
-      └─ utils/stats  aggregates raw match JSON into KDA / HS% / WR / ACS
-      └─ banter/      picks a roast pool from those stats and fills a template
-```
+## Architecture Notes
 
-A few decisions worth calling out:
-
-**One HTTP session for the whole process.** `HenrikClient` is constructed once by the bot and shared
-across every cog, lazily creating a single pooled `aiohttp.ClientSession` and closing it on shutdown.
-
-**One cache row serves three commands.** `/stats`, `/compare`, and `/leaderboard` all need the same
-thing — computed stats plus current rank — so they share a single row per player keyed by Discord ID.
-A warm `/leaderboard` makes zero API calls. Rows carry the Riot ID they were built from, so
-re-registering under a different account can't serve you stale numbers, and registration changes
-clear the row in the same transaction as the write.
-
-**The rate limiter matters more than the retries.** The free HenrikDev key allows 30 requests/minute
-and a cold leaderboard can want 30 at once. A token bucket in `HenrikClient` makes over-budget
-requests *wait* rather than fail, so heavy use renders slowly instead of erroring. Retry with
-backoff sits behind it as a backstop.
-
-**Cache TTLs are jittered.** `/leaderboard` writes every player's row in the same instant, so
-without jitter they'd all expire in the same instant and the next leaderboard would be fully cold
-every time. A small random spread staggers the refresh.
+- `api/henrik.py` — `HenrikClient` owns a single lazily-created `aiohttp.ClientSession`, reused across requests. The client lives on the bot instance (`bot.henrik`) and is closed cleanly on shutdown.
+- `utils/stats.py` — turns raw HenrikDev match JSON into the aggregate stats dict consumed everywhere else (`compute_stats`).
+- `banter/engine.py` + `banter/templates.py` — template-based roast generation, picked by stat thresholds (`_pick_pool`). `BANTER_MODE=ai` is scaffolded but not yet implemented.
+- `database/db.py` — user registration table + a 5-minute stats cache table (currently only used by `/leaderboard`).
 
 ## Setup
 
-Requires Python 3.14 (see `.python-version`), a Discord bot token, and a HenrikDev API key.
-
 ```bash
+git clone https://github.com/<your-username>/pressd.git
+cd pressd
 python -m venv .venv
+source .venv/bin/activate  # Windows: .venv\Scripts\activate
+pip install -r requirements.txt
+cp .env.example .env       # then fill in your values
+python main.py
 ```
 
-```bash
-.venv/Scripts/python.exe -m pip install -r requirements.txt
-```
+### Environment Variables
 
-Copy `.env.example` to `.env` and fill it in — every variable is documented in that file.
-
-In the Discord Developer Portal, the bot needs the **Server Members Intent** enabled
-(Bot → Privileged Gateway Intents). Without it, `/leaderboard` can't tell who's in the server and
-renders empty. Invite it with both the `bot` and `applications.commands` scopes.
-
-```bash
-.venv/Scripts/python.exe main.py
-```
-
-Set `DISCORD_GUILD_ID` locally so commands sync to your test server instantly. Leave it unset in
-production to sync globally — that reaches every server, but takes up to an hour to propagate.
-
-## Tests
-
-```bash
-.venv/Scripts/python.exe -m pip install -r requirements-dev.txt
-```
-
-```bash
-.venv/Scripts/python.exe -m pytest
-```
-
-No network or database access — the API client is stubbed at the session boundary and database
-tests run against a throwaway SQLite file.
+| Variable | Required | Description |
+|---|---|---|
+| `DISCORD_TOKEN` | Yes | Your bot's token from the [Discord Developer Portal](https://discord.com/developers/applications) |
+| `HENRIK_API_KEY` | Yes | API key from [HenrikDev](https://docs.henrikdev.xyz/) |
+| `DISCORD_GUILD_ID` | No | Guild ID for instant (guild-scoped) slash command syncing during dev. Omit for global sync. |
+| `DB_PATH` | No | Path to the SQLite database file. Defaults to `./valorant_bot.db`. Set this to a persistent volume path in production (e.g. Railway). |
+| `BANTER_MODE` | No | `template` (default) or `ai` (not yet implemented) |
 
 ## Deployment
 
-Runs on [Railway](https://railway.app) as a worker process (`Procfile`), which redeploys on every
-push to the deploy branch.
+Configured for [Railway](https://railway.app/) via the included `Procfile` (runs as a background worker, not a web service). Set the environment variables above in your Railway project, attach a persistent volume, and point `DB_PATH` at it so registrations survive redeploys.
 
-Two things matter in production:
+## Roadmap
 
-- **`DB_PATH` must point inside a mounted persistent volume** (e.g. `/data/valorant_bot.db`).
-  Unset, it falls back to a file in the project directory that is wiped on every redeploy, taking
-  every registration with it. The bot logs a warning at startup if it isn't set.
-- **`DISCORD_GUILD_ID` must not be set**, or the bot syncs commands to that one guild only.
+- [ ] Extend the stats cache to `/stats` and `/compare` (currently only `/leaderboard` uses it)
+- [ ] Paginate `/leaderboard` for large servers (Discord's 4096-char embed description limit)
+- [ ] Filter match history by game mode so deathmatch/casual don't skew competitive stats
+- [ ] Replace `print()` calls with structured `logging`
+- [ ] `BANTER_MODE=ai` — AI-generated banter (pending a product decision)
 
-SQLite runs in WAL mode so reads don't block behind writes; the bot warns at startup if the
-filesystem refuses it.
+## Content & Tone
 
-## Project structure
-
-```
-main.py              entrypoint
-bot.py               ValoPresserBot — cog loading, command sync, global error handler
-api/henrik.py        HenrikDev client: session, rate limiter, retries
-database/db.py       aiosqlite persistence (users, stats_cache)
-utils/cache.py       shared stats cache
-utils/stats.py       match JSON → computed stats
-utils/paginator.py   button pager for multi-page leaderboards
-banter/              roast pool selection and templates
-cogs/                slash commands
-tests/               pytest suite
-```
+The roast templates contain strong profanity and crude sexual humor. This is intentional. It's a bot built for a specific friend group's sense of humor but, it's worth knowing before you invite it somewhere new or point people at this repo. If you plan to run it in a mixed or public server, check Discord's [Developer Policy](https://discord.com/developers/docs/policies-and-agreements/developer-policy) on age-restricted content, and consider marking the app as age-restricted in the Developer Portal or maintaining a toned-down template set for that context.
 
 ## License
 
 MIT — see [LICENSE](LICENSE).
-
-Valorant data via [HenrikDev](https://api.henrikdev.xyz). Not affiliated with or endorsed by
-Riot Games.
