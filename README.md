@@ -36,8 +36,8 @@ A Discord bot that links your Riot account, pulls your Valorant match history an
 ## Setup
 
 ```bash
-git clone https://github.com/<your-username>/pressd.git
-cd pressd
+git clone https://github.com/<your-username>/pressd-discord-bot.git
+cd pressd-discord-bot
 python -m venv .venv
 source .venv/bin/activate  # Windows: .venv\Scripts\activate
 pip install -r requirements.txt
