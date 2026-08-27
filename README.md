@@ -18,6 +18,12 @@ A Discord bot that links your Riot account, pulls your Valorant match history an
 | `/roast` | Instant roast based on someone's recent performance |
 | `/version` | Bot version, release date, and command count |
 
+## Preview
+
+![Stats command](assets/screenshots/1.png)
+![Compare command](assets/screenshots/3.png)
+![Leaderboard](assets/screenshots/4.png)
+
 ## Tech Stack
 
 - [`discord.py`](https://github.com/Rapptz/discord.py) — slash commands, cogs
